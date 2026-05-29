@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback, useRef, Suspense } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { ARScene } from '../components/ar/ARScene';
 import { generateRoomQR } from '../utils/qrcode';
 import { checkARSupport } from '../utils/xr';
 import { randomColor } from '../utils/math';
@@ -10,18 +11,6 @@ interface User {
   color: string;
   isHost: boolean;
 }
-
-interface PlacedObject {
-  id: string;
-  type: string;
-  position: [number, number, number];
-  rotation: [number, number, number];
-  scale: [number, number, number];
-  color: string;
-  placedBy: string;
-}
-
-type Tool = 'select' | 'cube' | 'sphere' | 'cylinder' | 'text' | 'delete';
 
 export default function ARView() {
   const { roomId } = useParams<{ roomId: string }>();
@@ -37,17 +26,11 @@ export default function ARView() {
   } | null>(null);
   const [showQR, setShowQR] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
-  const [activeTool, setActiveTool] = useState<Tool>('select');
-  const [selectedObject, setSelectedObject] = useState<PlacedObject | null>(null);
   const [showUsers, setShowUsers] = useState(false);
-  const [showProperties, setShowProperties] = useState(false);
   const [users, setUsers] = useState<User[]>([
     { id: '1', name: 'You', color: randomColor(), isHost: true },
   ]);
-  const [placedObjects, setPlacedObjects] = useState<PlacedObject[]>([]);
   const [error, setError] = useState<string | null>(null);
-
-  const sceneRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const init = async () => {
@@ -72,53 +55,9 @@ export default function ARView() {
     }
   }, [roomId]);
 
-  const handlePlaceObject = useCallback((type: Tool) => {
-    if (type === 'select' || type === 'delete') return;
-
-    const newObj: PlacedObject = {
-      id: crypto.randomUUID(),
-      type,
-      position: [
-        (Math.random() - 0.5) * 2,
-        0.5,
-        (Math.random() - 0.5) * 2,
-      ],
-      rotation: [0, 0, 0],
-      scale: [1, 1, 1],
-      color: randomColor(),
-      placedBy: '1',
-    };
-
-    setPlacedObjects((prev) => [...prev, newObj]);
-  }, []);
-
-  const handleSelectObject = useCallback((obj: PlacedObject) => {
-    setSelectedObject(obj);
-    setShowProperties(true);
-  }, []);
-
-  const handleDeleteObject = useCallback((id: string) => {
-    setPlacedObjects((prev) => prev.filter((o) => o.id !== id));
-    setSelectedObject(null);
-    setShowProperties(false);
-  }, []);
-
-  const handleSceneClick = useCallback(
-    (e: React.MouseEvent<HTMLDivElement>) => {
-      if (activeTool === 'select') {
-        setSelectedObject(null);
-        setShowProperties(false);
-        return;
-      }
-      if (activeTool === 'delete') return;
-      handlePlaceObject(activeTool);
-    },
-    [activeTool, handlePlaceObject]
-  );
-
   const toggleFullscreen = useCallback(async () => {
     if (!document.fullscreenElement) {
-      await sceneRef.current?.requestFullscreen();
+      await document.documentElement.requestFullscreen();
       setIsFullscreen(true);
     } else {
       await document.exitFullscreen();
@@ -129,64 +68,6 @@ export default function ARView() {
   const handleBack = useCallback(() => {
     navigate('/');
   }, [navigate]);
-
-  const tools: { id: Tool; label: string; icon: JSX.Element }[] = [
-    {
-      id: 'select',
-      label: 'Select',
-      icon: (
-        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.657l2.121 2.121M20.485 3.515l-2.121 2.121" />
-        </svg>
-      ),
-    },
-    {
-      id: 'cube',
-      label: 'Cube',
-      icon: (
-        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-        </svg>
-      ),
-    },
-    {
-      id: 'sphere',
-      label: 'Sphere',
-      icon: (
-        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <circle cx="12" cy="12" r="9" strokeWidth={2} />
-        </svg>
-      ),
-    },
-    {
-      id: 'cylinder',
-      label: 'Cylinder',
-      icon: (
-        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <ellipse cx="12" cy="6" rx="8" ry="3" strokeWidth={2} />
-          <path d="M4 6v12c0 1.657 3.582 3 8 3s8-1.343 8-3V6" strokeWidth={2} />
-        </svg>
-      ),
-    },
-    {
-      id: 'text',
-      label: 'Text',
-      icon: (
-        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M8 6v12m8-12v12M6 18h4m4 0h4" />
-        </svg>
-      ),
-    },
-    {
-      id: 'delete',
-      label: 'Delete',
-      icon: (
-        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3m6 0a1 1 0 001 1h1m-1-1a1 1 0 00-1-1h-1m-1-1a1 1 0 001-1v-1m-6 0a1 1 0 00-1-1h-1m1 1a1 1 0 001 1h1" />
-        </svg>
-      ),
-    },
-  ];
 
   if (isLoading) {
     return (
@@ -223,80 +104,15 @@ export default function ARView() {
 
   const arModeIndicator =
     arSupported?.platformAR === 'native'
-      ? { label: '📱 Native AR', color: 'text-green-400' }
+      ? { label: 'Native AR', color: 'text-green-400' }
       : arSupported?.platformAR === 'web'
-        ? { label: '🎮 3D Preview', color: 'text-blue-400' }
-        : { label: '⚠️ Limited Mode', color: 'text-yellow-400' };
+        ? { label: '3D Preview', color: 'text-blue-400' }
+        : { label: 'Limited Mode', color: 'text-yellow-400' };
 
   return (
-    <div ref={sceneRef} className="min-h-screen bg-gray-950 relative overflow-hidden">
+    <div className="min-h-screen bg-gray-950 relative overflow-hidden">
       {/* AR Scene */}
-      <Suspense
-        fallback={
-          <div className="absolute inset-0 flex items-center justify-center bg-gray-950">
-            <div className="w-12 h-12 border-4 border-blue-500/30 border-t-blue-500 rounded-full animate-spin" />
-          </div>
-        }
-      >
-        <div
-          className="absolute inset-0 bg-gradient-to-b from-gray-900 to-gray-950 cursor-crosshair"
-          onClick={handleSceneClick}
-        >
-          {/* Simulated AR Grid */}
-          <div className="absolute inset-0 opacity-10">
-            <div
-              className="w-full h-full"
-              style={{
-                backgroundImage: 'linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)',
-                backgroundSize: '40px 40px',
-                perspective: '500px',
-                transform: 'rotateX(60deg)',
-                transformOrigin: 'center 80%',
-              }}
-            />
-          </div>
-
-          {/* Placed Objects (rendered in scene) */}
-          {placedObjects.map((obj) => (
-            <div
-              key={obj.id}
-              className={`absolute cursor-pointer transition-all duration-200 hover:scale-110 ${
-                selectedObject?.id === obj.id ? 'ring-2 ring-white ring-offset-2 ring-offset-transparent' : ''
-              }`}
-              style={{
-                left: `${50 + obj.position[0] * 20}%`,
-                top: `${50 + obj.position[2] * 20}%`,
-                transform: `translate(-50%, -50%)`,
-              }}
-              onClick={(e) => {
-                e.stopPropagation();
-                handleSelectObject(obj);
-              }}
-            >
-              <div
-                className="w-12 h-12 rounded-lg shadow-lg flex items-center justify-center"
-                style={{ backgroundColor: obj.color }}
-              >
-                {obj.type === 'cube' && <div className="w-6 h-6 bg-white/30 rounded" />}
-                {obj.type === 'sphere' && <div className="w-6 h-6 bg-white/30 rounded-full" />}
-                {obj.type === 'cylinder' && <div className="w-4 h-6 bg-white/30 rounded-full" />}
-                {obj.type === 'text' && <span className="text-white text-xs font-bold">T</span>}
-              </div>
-            </div>
-          ))}
-
-          {/* AR Not Available Message */}
-          {!arSupported?.supported && (
-            <div className="absolute inset-0 flex items-center justify-center">
-              <div className="text-center bg-black/40 backdrop-blur-sm rounded-2xl p-8 border border-white/10">
-                <div className="text-4xl mb-4">⚠️</div>
-                <p className="text-white/80 mb-2">AR Mode Unavailable</p>
-                <p className="text-white/40 text-sm">Running in preview mode. Objects are placed in a simulated view.</p>
-              </div>
-            </div>
-          )}
-        </div>
-      </Suspense>
+      <ARScene roomId={roomId ?? ''} className="absolute inset-0" />
 
       {/* Status Bar */}
       <div className="absolute top-0 left-0 right-0 z-20 flex items-center justify-between px-4 py-3 bg-black/40 backdrop-blur-xl border-b border-white/10">
@@ -358,29 +174,6 @@ export default function ARView() {
         </div>
       </div>
 
-      {/* Floating Toolbar */}
-      <div className="absolute left-4 top-1/2 -translate-y-1/2 z-20 flex flex-col gap-2">
-        {tools.map((tool) => (
-          <button
-            key={tool.id}
-            onClick={() => {
-              setActiveTool(tool.id);
-              if (tool.id !== 'select' && tool.id !== 'delete') {
-                handlePlaceObject(tool.id);
-              }
-            }}
-            className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all duration-200 ${
-              activeTool === tool.id
-                ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30'
-                : 'bg-white/10 text-white/70 hover:bg-white/20 hover:text-white backdrop-blur-sm'
-            }`}
-            title={tool.label}
-          >
-            {tool.icon}
-          </button>
-        ))}
-      </div>
-
       {/* User List Panel */}
       {showUsers && (
         <div className="absolute right-4 top-20 z-20 w-64 bg-black/60 backdrop-blur-xl border border-white/10 rounded-2xl p-4 shadow-xl">
@@ -400,67 +193,6 @@ export default function ARView() {
                 </div>
               </div>
             ))}
-          </div>
-        </div>
-      )}
-
-      {/* Object Properties Panel */}
-      {showProperties && selectedObject && (
-        <div className="absolute right-4 bottom-24 z-20 w-72 bg-black/60 backdrop-blur-xl border border-white/10 rounded-2xl p-4 shadow-xl">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-semibold text-white capitalize">{selectedObject.type} Properties</h3>
-            <button
-              onClick={() => {
-                setSelectedObject(null);
-                setShowProperties(false);
-              }}
-              className="p-1 rounded-lg hover:bg-white/10 text-white/60 hover:text-white"
-            >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-
-          <div className="space-y-3">
-            <div>
-              <label className="text-xs text-white/50 block mb-1">Color</label>
-              <div className="flex gap-2">
-                <div
-                  className="w-8 h-8 rounded-lg border-2 border-white/20"
-                  style={{ backgroundColor: selectedObject.color }}
-                />
-                <span className="text-sm text-white/80 flex items-center">{selectedObject.color}</span>
-              </div>
-            </div>
-
-            <div>
-              <label className="text-xs text-white/50 block mb-1">Position</label>
-              <div className="grid grid-cols-3 gap-2">
-                {['X', 'Y', 'Z'].map((axis, i) => (
-                  <div key={axis} className="text-center">
-                    <div className="text-xs text-white/40 mb-1">{axis}</div>
-                    <div className="px-2 py-1 bg-white/5 rounded text-sm text-white/80 font-mono">
-                      {selectedObject.position[i].toFixed(2)}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <label className="text-xs text-white/50 block mb-1">Placed by</label>
-              <div className="text-sm text-white/80">
-                {users.find((u) => u.id === selectedObject.placedBy)?.name ?? 'Unknown'}
-              </div>
-            </div>
-
-            <button
-              onClick={() => handleDeleteObject(selectedObject.id)}
-              className="w-full py-2 mt-2 bg-red-500/20 border border-red-500/30 text-red-400 rounded-lg text-sm font-medium hover:bg-red-500/30 transition-all"
-            >
-              Delete Object
-            </button>
           </div>
         </div>
       )}
@@ -488,15 +220,6 @@ export default function ARView() {
           </div>
         </div>
       )}
-
-      {/* Bottom Toolbar Info */}
-      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20">
-        <div className="px-4 py-2 bg-black/40 backdrop-blur-xl rounded-full border border-white/10 text-sm text-white/60">
-          {activeTool === 'select' && 'Tap an object to select it'}
-          {activeTool === 'delete' && 'Tap an object to delete it'}
-          {activeTool !== 'select' && activeTool !== 'delete' && 'Tap in the scene to place object'}
-        </div>
-      </div>
     </div>
   );
 }
