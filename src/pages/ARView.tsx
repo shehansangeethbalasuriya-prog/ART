@@ -29,7 +29,12 @@ export default function ARView() {
 
   const [isLoading, setIsLoading] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [arSupported, setArSupported] = useState<boolean | null>(null);
+  const [arSupported, setArSupported] = useState<{
+    supported: boolean;
+    platformAR?: 'native' | 'web' | 'none';
+    reason?: string;
+    platform?: string;
+  } | null>(null);
   const [showQR, setShowQR] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [activeTool, setActiveTool] = useState<Tool>('select');
@@ -48,9 +53,12 @@ export default function ARView() {
     const init = async () => {
       try {
         const support = await checkARSupport();
-        setArSupported(support.supported);
+        setArSupported(support);
       } catch {
-        setArSupported(false);
+        setArSupported({
+          supported: false,
+          platformAR: 'none',
+        });
       } finally {
         setIsLoading(false);
       }
@@ -128,7 +136,7 @@ export default function ARView() {
       label: 'Select',
       icon: (
         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.657l2.121 2.121M20.485 3.515l-2.121 2.121" />
         </svg>
       ),
     },
@@ -174,7 +182,7 @@ export default function ARView() {
       label: 'Delete',
       icon: (
         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3m6 0a1 1 0 001 1h1m-1-1a1 1 0 00-1-1h-1m-1-1a1 1 0 001-1v-1m-6 0a1 1 0 00-1-1h-1m1 1a1 1 0 001 1h1" />
         </svg>
       ),
     },
@@ -213,6 +221,13 @@ export default function ARView() {
     );
   }
 
+  const arModeIndicator =
+    arSupported?.platformAR === 'native'
+      ? { label: '📱 Native AR', color: 'text-green-400' }
+      : arSupported?.platformAR === 'web'
+        ? { label: '🎮 3D Preview', color: 'text-blue-400' }
+        : { label: '⚠️ Limited Mode', color: 'text-yellow-400' };
+
   return (
     <div ref={sceneRef} className="min-h-screen bg-gray-950 relative overflow-hidden">
       {/* AR Scene */}
@@ -229,13 +244,16 @@ export default function ARView() {
         >
           {/* Simulated AR Grid */}
           <div className="absolute inset-0 opacity-10">
-            <div className="w-full h-full" style={{
-              backgroundImage: 'linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)',
-              backgroundSize: '40px 40px',
-              perspective: '500px',
-              transform: 'rotateX(60deg)',
-              transformOrigin: 'center 80%',
-            }} />
+            <div
+              className="w-full h-full"
+              style={{
+                backgroundImage: 'linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)',
+                backgroundSize: '40px 40px',
+                perspective: '500px',
+                transform: 'rotateX(60deg)',
+                transformOrigin: 'center 80%',
+              }}
+            />
           </div>
 
           {/* Placed Objects (rendered in scene) */}
@@ -268,10 +286,10 @@ export default function ARView() {
           ))}
 
           {/* AR Not Available Message */}
-          {arSupported === false && (
+          {!arSupported?.supported && (
             <div className="absolute inset-0 flex items-center justify-center">
               <div className="text-center bg-black/40 backdrop-blur-sm rounded-2xl p-8 border border-white/10">
-                <div className="text-4xl mb-4">📷</div>
+                <div className="text-4xl mb-4">⚠️</div>
                 <p className="text-white/80 mb-2">AR Mode Unavailable</p>
                 <p className="text-white/40 text-sm">Running in preview mode. Objects are placed in a simulated view.</p>
               </div>
@@ -293,6 +311,9 @@ export default function ARView() {
         </button>
 
         <div className="flex items-center gap-2">
+          <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/10 text-sm ${arModeIndicator.color}`}>
+            {arModeIndicator.label}
+          </div>
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/10 text-sm">
             <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
             <span className="text-white/80">{users.length} online</span>
@@ -309,7 +330,7 @@ export default function ARView() {
             title="Show QR Code"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
             </svg>
           </button>
           <button
@@ -328,7 +349,7 @@ export default function ARView() {
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               {isFullscreen ? (
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 9V4.5M9 9H4.5M9 9L3.75 3.75M9 15v4.5M9 15H4.5M9 15l-5.25 5.25M15 9h4.5M15 9V4.5M15 9l5.25-5.25M15 15h4.5M15 15v4.5m0-4.5l5.25 5.25" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 9V4.5M9 9H4.5M9 9L3.75 3.75M9 15v4.5M9 15H4.5M9 15l-5.25 5.25M15 9h4.5M15 9V4.5M15 9l5.25-5.25M15 15h4.5M15 15v4.5M15 15l5.25 5.25" />
               ) : (
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
               )}
@@ -375,9 +396,7 @@ export default function ARView() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-medium text-white truncate">{user.name}</div>
-                  {user.isHost && (
-                    <span className="text-xs text-yellow-400">Host</span>
-                  )}
+                  {user.isHost && <span className="text-xs text-yellow-400">Host</span>}
                 </div>
               </div>
             ))}
