@@ -1,6 +1,6 @@
-import React, { useRef, useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { XR } from '@react-three/xr';
+import { XR, useXR, startSession, stopSession } from '@react-three/xr';
 import { Environment } from '@react-three/drei';
 import * as THREE from 'three';
 import { useStore } from '../../lib/store';
@@ -15,6 +15,36 @@ import { ARSessionState } from '../../types';
 interface ARSceneProps {
   roomId: string;
   className?: string;
+}
+
+function SessionManager() {
+  const isPresenting = useXR((s) => s.isPresenting);
+  const arSessionState = useStore((s) => s.arSessionState);
+  const setARSessionState = useStore((s) => s.setARSessionState);
+
+  useEffect(() => {
+    if (arSessionState === ARSessionState.Initializing && !isPresenting) {
+      startSession('immersive-ar', {
+        requiredFeatures: ['hit-test'],
+        optionalFeatures: ['dom-overlay', 'anchors', 'plane-detection'],
+      })
+        .then(() => setARSessionState(ARSessionState.Running))
+        .catch((err: unknown) => {
+          console.error('Failed to enter AR:', err);
+          setARSessionState(ARSessionState.Error);
+        });
+    } else if (arSessionState === ARSessionState.Initializing && isPresenting) {
+      setARSessionState(ARSessionState.Running);
+    }
+  }, [arSessionState, isPresenting, setARSessionState]);
+
+  useEffect(() => {
+    if (arSessionState === ARSessionState.Inactive && isPresenting) {
+      stopSession().catch(console.error);
+    }
+  }, [arSessionState, isPresenting]);
+
+  return null;
 }
 
 function SceneContent() {
@@ -78,9 +108,7 @@ export function ARScene({ roomId, className = '' }: ARSceneProps) {
   const [error, setError] = useState<string | null>(null);
   const setARSessionState = useStore((s) => s.setARSessionState);
   const setObjects = useStore((s) => s.setObjects);
-  const addObject = useStore((s) => s.addObject);
-  const updateObject = useStore((s) => s.updateObject);
-  const removeObject = useStore((s) => s.removeObject);
+  const arSessionState = useStore((s) => s.arSessionState);
 
   useEffect(() => {
     setIsLoading(false);
@@ -106,24 +134,11 @@ export function ARScene({ roomId, className = '' }: ARSceneProps) {
   }, [roomId, setObjects]);
 
   const handleEnterAR = useCallback(async () => {
-    try {
-      setARSessionState(ARSessionState.Initializing);
-      setARSessionState(ARSessionState.Running);
-    } catch (err) {
-      console.error('Failed to enter AR:', err);
-      setARSessionState(ARSessionState.Error);
-      setError(
-        err instanceof Error ? err.message : 'Failed to start AR session'
-      );
-    }
+    setARSessionState(ARSessionState.Initializing);
   }, [setARSessionState]);
 
   const handleExitAR = useCallback(async () => {
-    try {
-      setARSessionState(ARSessionState.Inactive);
-    } catch (err) {
-      console.error('Failed to exit AR:', err);
-    }
+    setARSessionState(ARSessionState.Inactive);
   }, [setARSessionState]);
 
   if (isLoading) {
@@ -161,28 +176,35 @@ export function ARScene({ roomId, className = '' }: ARSceneProps) {
         }}
       >
         <XR>
+          <SessionManager />
           <SceneContent />
         </XR>
       </Canvas>
 
-      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-4 z-40">
-        <button
-          onClick={handleEnterAR}
-          className="px-6 py-3 bg-white/10 backdrop-blur-md text-white rounded-xl
-            border border-white/20 hover:bg-white/20 transition-all duration-200
-            active:scale-95 font-medium"
-        >
-          Enter AR
-        </button>
-        <button
-          onClick={handleExitAR}
-          className="px-6 py-3 bg-white/10 backdrop-blur-md text-white rounded-xl
-            border border-white/20 hover:bg-white/20 transition-all duration-200
-            active:scale-95 font-medium"
-        >
-          Exit AR
-        </button>
-      </div>
+      {arSessionState !== ARSessionState.Running ? (
+        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-40">
+          <button
+            onClick={handleEnterAR}
+            disabled={arSessionState === ARSessionState.Initializing}
+            className="px-6 py-3 bg-blue-600 text-white rounded-xl
+              shadow-lg shadow-blue-500/30 hover:bg-blue-500 transition-all duration-200
+              active:scale-95 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {arSessionState === ARSessionState.Initializing ? 'Initializing...' : 'Enter AR'}
+          </button>
+        </div>
+      ) : (
+        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-40">
+          <button
+            onClick={handleExitAR}
+            className="px-6 py-3 bg-white/10 backdrop-blur-md text-white rounded-xl
+              border border-white/20 hover:bg-white/20 transition-all duration-200
+              active:scale-95 font-medium"
+          >
+            Exit AR
+          </button>
+        </div>
+      )}
     </div>
   );
 }
